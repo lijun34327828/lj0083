@@ -92,6 +92,7 @@ export const initialOrders: Order[] = [
     equipmentFee: 95,
     packageDiscount: 12,
     totalAmount: 203,
+    packagesApplied: [],
     equipmentRentals: [
       { equipmentId: 'eq-003', equipmentName: '专业护臂', quantity: 2, pricePerDay: 15, subtotal: 30 },
       { equipmentId: 'eq-004', equipmentName: '射箭手套', quantity: 2, pricePerDay: 12, subtotal: 24 },
@@ -107,6 +108,7 @@ export const initialOrders: Order[] = [
     equipmentFee: 180,
     packageDiscount: 36,
     totalAmount: 384,
+    packagesApplied: [],
     equipmentRentals: [
       { equipmentId: 'eq-001', equipmentName: '专业反曲弓', quantity: 3, pricePerDay: 80, subtotal: 240 },
     ],

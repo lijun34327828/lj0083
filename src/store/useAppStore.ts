@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Lane, Booking, Equipment, Package, Order, EquipmentRental, BookingFormData } from '@/types';
+import type { Lane, Booking, Equipment, Package, Order, EquipmentRental, BookingFormData, AppliedPackage } from '@/types';
 import { lanes as initialLanes } from '@/data/lanes';
 import { equipment as initialEquipment } from '@/data/equipment';
 import { packages as initialPackages } from '@/data/packages';
@@ -10,7 +10,8 @@ import {
   calculateLaneFee,
   calculateEquipmentFee,
   calculateEquipmentRentalSubtotal,
-  findBestPackage,
+  findBestPackages,
+  calculateTotalDiscount,
   calculateTotalAmount,
   generateBookingId,
   generateOrderId,
@@ -57,7 +58,7 @@ interface AppState {
   getEndTime: () => string;
   getLaneFee: () => number;
   getEquipmentFee: () => number;
-  getBestPackage: () => { pkg: Package | null; discount: number };
+  getBestPackages: () => AppliedPackage[];
   getTotalAmount: () => number;
   getCurrentBooking: () => Booking | undefined;
   getCurrentOrder: () => Order | undefined;
@@ -202,7 +203,7 @@ export const useAppStore = create<AppState>()(
         const laneFee = calculateLaneFee(lane.pricePerHour, duration);
         const equipmentFee = calculateEquipmentFee(equipmentRentals);
 
-        const { pkg, discount } = findBestPackage(
+        const appliedPackages = findBestPackages(
           get().packages,
           booking.peopleCount,
           duration,
@@ -211,7 +212,8 @@ export const useAppStore = create<AppState>()(
           equipmentFee
         );
 
-        const totalAmount = calculateTotalAmount(laneFee, equipmentFee, discount);
+        const totalDiscount = calculateTotalDiscount(appliedPackages);
+        const totalAmount = calculateTotalAmount(laneFee, equipmentFee, totalDiscount);
 
         const orderId = generateOrderId();
         const newOrder: Order = {
@@ -219,9 +221,9 @@ export const useAppStore = create<AppState>()(
           bookingId,
           laneFee,
           equipmentFee,
-          packageDiscount: discount,
+          packageDiscount: totalDiscount,
           totalAmount,
-          packageApplied: pkg || undefined,
+          packagesApplied: appliedPackages,
           equipmentRentals: [...equipmentRentals],
           status: 'unpaid',
           createdAt: new Date().toISOString(),
@@ -265,12 +267,12 @@ export const useAppStore = create<AppState>()(
         return calculateEquipmentFee(get().equipmentRentals);
       },
 
-      getBestPackage: () => {
+      getBestPackages: () => {
         const { packages, selectedDuration, peopleCount, equipmentRentals } = get();
         const laneFee = get().getLaneFee();
         const equipmentFee = get().getEquipmentFee();
 
-        return findBestPackage(
+        return findBestPackages(
           packages,
           peopleCount,
           selectedDuration,
@@ -283,8 +285,9 @@ export const useAppStore = create<AppState>()(
       getTotalAmount: () => {
         const laneFee = get().getLaneFee();
         const equipmentFee = get().getEquipmentFee();
-        const { discount } = get().getBestPackage();
-        return calculateTotalAmount(laneFee, equipmentFee, discount);
+        const appliedPackages = get().getBestPackages();
+        const totalDiscount = calculateTotalDiscount(appliedPackages);
+        return calculateTotalAmount(laneFee, equipmentFee, totalDiscount);
       },
 
       getCurrentBooking: () => {

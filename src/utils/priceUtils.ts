@@ -1,4 +1,4 @@
-import type { Package, EquipmentRental, Lane } from '@/types';
+import type { Package, EquipmentRental, Lane, AppliedPackage } from '@/types';
 
 export const calculateLaneFee = (pricePerHour: number, durationHours: number): number => {
   return Math.ceil(pricePerHour * durationHours * 100) / 100;
@@ -15,16 +15,16 @@ export const calculateEquipmentRentalSubtotal = (
   return Math.ceil(pricePerDay * quantity * 100) / 100;
 };
 
-export const findBestPackage = (
+export const findBestPackages = (
   packages: Package[],
   peopleCount: number,
   durationHours: number,
   laneFee: number,
   equipmentCount: number,
   equipmentFee: number
-): { pkg: Package | null; discount: number } => {
-  let bestPackage: Package | null = null;
-  let maxDiscount = 0;
+): AppliedPackage[] => {
+  const laneCandidates: AppliedPackage[] = [];
+  const equipmentCandidates: AppliedPackage[] = [];
 
   for (const pkg of packages) {
     if (!pkg.active) continue;
@@ -67,13 +67,33 @@ export const findBestPackage = (
         break;
     }
 
-    if (applicable && discount > maxDiscount) {
-      maxDiscount = discount;
-      bestPackage = pkg;
+    if (applicable && discount > 0) {
+      const roundedDiscount = Math.ceil(discount * 100) / 100;
+      if (pkg.target === 'lane') {
+        laneCandidates.push({ pkg, discount: roundedDiscount });
+      } else if (pkg.target === 'equipment') {
+        equipmentCandidates.push({ pkg, discount: roundedDiscount });
+      }
     }
   }
 
-  return { pkg: bestPackage, discount: Math.ceil(maxDiscount * 100) / 100 };
+  const result: AppliedPackage[] = [];
+
+  if (laneCandidates.length > 0) {
+    laneCandidates.sort((a, b) => b.discount - a.discount);
+    result.push(laneCandidates[0]);
+  }
+
+  if (equipmentCandidates.length > 0) {
+    equipmentCandidates.sort((a, b) => b.discount - a.discount);
+    result.push(equipmentCandidates[0]);
+  }
+
+  return result;
+};
+
+export const calculateTotalDiscount = (appliedPackages: AppliedPackage[]): number => {
+  return Math.ceil(appliedPackages.reduce((sum, ap) => sum + ap.discount, 0) * 100) / 100;
 };
 
 export const calculateTotalAmount = (

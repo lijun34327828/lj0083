@@ -8,6 +8,8 @@ export type EquipmentCategory = 'armguard' | 'bow' | 'arrow' | 'glove' | 'other'
 
 export type PackageType = 'group' | 'duration' | 'combo';
 
+export type PackageTarget = 'lane' | 'equipment';
+
 export type DiscountType = 'percentage' | 'fixed';
 
 export interface Lane {
@@ -55,12 +57,18 @@ export interface Package {
   id: string;
   name: string;
   type: PackageType;
+  target: PackageTarget;
   minPeople?: number;
   minDuration?: number;
   discountType: DiscountType;
   discountValue: number;
   description: string;
   active: boolean;
+}
+
+export interface AppliedPackage {
+  pkg: Package;
+  discount: number;
 }
 
 export interface Order {
@@ -70,7 +78,7 @@ export interface Order {
   equipmentFee: number;
   packageDiscount: number;
   totalAmount: number;
-  packageApplied?: Package;
+  packagesApplied: AppliedPackage[];
   equipmentRentals: EquipmentRental[];
   status: OrderStatus;
   createdAt: string;

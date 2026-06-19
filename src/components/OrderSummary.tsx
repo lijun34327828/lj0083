@@ -1,6 +1,6 @@
 import { Receipt, Target, ShoppingBag, Tag, Calculator } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { formatPrice } from '@/utils/priceUtils';
+import { formatPrice, calculateTotalDiscount } from '@/utils/priceUtils';
 
 interface OrderSummaryProps {
   showTitle?: boolean;
@@ -8,13 +8,14 @@ interface OrderSummaryProps {
 }
 
 const OrderSummary = ({ showTitle = true, compact = false }: OrderSummaryProps) => {
-  const { getSelectedLane, getLaneFee, getEquipmentFee, getBestPackage, getTotalAmount, getEndTime, selectedStartTime, selectedDuration, equipmentRentals } =
+  const { getSelectedLane, getLaneFee, getEquipmentFee, getBestPackages, getTotalAmount, getEndTime, selectedStartTime, selectedDuration, equipmentRentals } =
     useAppStore();
 
   const lane = getSelectedLane();
   const laneFee = getLaneFee();
   const equipmentFee = getEquipmentFee();
-  const { pkg, discount } = getBestPackage();
+  const appliedPackages = getBestPackages();
+  const totalDiscount = calculateTotalDiscount(appliedPackages);
   const totalAmount = getTotalAmount();
   const endTime = getEndTime();
 
@@ -64,8 +65,8 @@ const OrderSummary = ({ showTitle = true, compact = false }: OrderSummaryProps) 
           </div>
         )}
 
-        {pkg && discount > 0 && (
-          <div className="flex items-start justify-between text-red-500">
+        {appliedPackages.map(({ pkg, discount }) => (
+          <div key={pkg.id} className="flex items-start justify-between text-red-500">
             <div className="flex items-center gap-2">
               <Tag className="w-4 h-4 mt-0.5" />
               <div>
@@ -75,7 +76,7 @@ const OrderSummary = ({ showTitle = true, compact = false }: OrderSummaryProps) 
             </div>
             <span className="text-sm font-medium">-{formatPrice(discount)}</span>
           </div>
-        )}
+        ))}
 
         <div className="border-t border-forest-200 pt-3 mt-3">
           <div className="flex items-center justify-between">

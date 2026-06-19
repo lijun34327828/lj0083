@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Receipt, Target, ShoppingBag, Tag, Calendar, Clock, User, Phone, Users, CheckCircle, CreditCard, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store/useAppStore';
-import { formatPrice } from '@/utils/priceUtils';
+import { formatPrice, calculateTotalDiscount } from '@/utils/priceUtils';
+import type { AppliedPackage } from '@/types';
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ const Checkout = () => {
     getCurrentOrder,
     getLaneFee,
     getEquipmentFee,
-    getBestPackage,
+    getBestPackages,
     getTotalAmount,
     equipmentRentals,
     createOrder,
@@ -29,7 +30,8 @@ const Checkout = () => {
 
   const laneFee = getLaneFee();
   const equipmentFee = getEquipmentFee();
-  const { pkg: bestPackage, discount } = getBestPackage();
+  const appliedPackages = getBestPackages();
+  const totalDiscount = calculateTotalDiscount(appliedPackages);
   const totalAmount = getTotalAmount();
 
   const handleCreateOrder = () => {
@@ -79,9 +81,9 @@ const Checkout = () => {
   const displayOrder = existingOrder || {
     laneFee,
     equipmentFee,
-    packageDiscount: discount,
+    packageDiscount: totalDiscount,
     totalAmount,
-    packageApplied: bestPackage,
+    packagesApplied: appliedPackages,
     equipmentRentals,
     status: 'unpaid' as const,
   };
@@ -258,26 +260,30 @@ const Checkout = () => {
             </div>
           )}
 
-          {displayOrder.packageApplied && (
+          {displayOrder.packagesApplied && displayOrder.packagesApplied.length > 0 && (
             <div className="card bg-gradient-to-r from-bronze-50 to-ivory-200 border-bronze-200">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <Tag className="w-5 h-5 text-bronze-500" />
                 <h3 className="font-serif text-lg font-bold text-forest-800">
                   已享优惠
                 </h3>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-forest-800">
-                    {displayOrder.packageApplied.name}
-                  </p>
-                  <p className="text-sm text-bark-600">
-                    {displayOrder.packageApplied.description}
-                  </p>
-                </div>
-                <span className="font-serif text-xl font-bold text-red-500">
-                  -{formatPrice(displayOrder.packageDiscount)}
-                </span>
+              <div className="space-y-3">
+                {displayOrder.packagesApplied.map(({ pkg, discount }: AppliedPackage) => (
+                  <div key={pkg.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-forest-800">
+                        {pkg.name}
+                      </p>
+                      <p className="text-sm text-bark-600">
+                        {pkg.description}
+                      </p>
+                    </div>
+                    <span className="font-serif text-xl font-bold text-red-500">
+                      -{formatPrice(discount)}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}

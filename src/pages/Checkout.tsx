@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Receipt, Target, ShoppingBag, Tag, Calendar, Clock, User, Phone, Users, CheckCircle, CreditCard, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Receipt, Target, ShoppingBag, Tag, Calendar, Clock, User, Phone, Users, CheckCircle, CreditCard, ArrowLeft, AlertTriangle, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store/useAppStore';
-import { formatPrice, calculateTotalDiscount } from '@/utils/priceUtils';
-import type { AppliedPackage } from '@/types';
+import { formatPrice, calculateTotalDiscount, calculateTotalActivityDiscount } from '@/utils/priceUtils';
+import type { AppliedPackage, AppliedActivity } from '@/types';
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -13,6 +13,7 @@ const Checkout = () => {
     getLaneFee,
     getEquipmentFee,
     getBestPackages,
+    getApplicableActivities,
     getTotalAmount,
     equipmentRentals,
     createOrder,
@@ -31,7 +32,9 @@ const Checkout = () => {
   const laneFee = getLaneFee();
   const equipmentFee = getEquipmentFee();
   const appliedPackages = getBestPackages();
-  const totalDiscount = calculateTotalDiscount(appliedPackages);
+  const appliedActivities = getApplicableActivities();
+  const totalPackageDiscount = calculateTotalDiscount(appliedPackages);
+  const totalActivityDiscount = calculateTotalActivityDiscount(appliedActivities);
   const totalAmount = getTotalAmount();
 
   const handleCreateOrder = () => {
@@ -81,9 +84,11 @@ const Checkout = () => {
   const displayOrder = existingOrder || {
     laneFee,
     equipmentFee,
-    packageDiscount: totalDiscount,
+    packageDiscount: totalPackageDiscount,
+    activityDiscount: totalActivityDiscount,
     totalAmount,
     packagesApplied: appliedPackages,
+    activitiesApplied: appliedActivities,
     equipmentRentals,
     status: 'unpaid' as const,
   };
@@ -260,7 +265,7 @@ const Checkout = () => {
             </div>
           )}
 
-          {displayOrder.packagesApplied && displayOrder.packagesApplied.length > 0 && (
+          {(displayOrder.packagesApplied && displayOrder.packagesApplied.length > 0) || (displayOrder.activitiesApplied && displayOrder.activitiesApplied.length > 0) ? (
             <div className="card bg-gradient-to-r from-bronze-50 to-ivory-200 border-bronze-200">
               <div className="flex items-center gap-2 mb-3">
                 <Tag className="w-5 h-5 text-bronze-500" />
@@ -268,25 +273,59 @@ const Checkout = () => {
                   已享优惠
                 </h3>
               </div>
-              <div className="space-y-3">
-                {displayOrder.packagesApplied.map(({ pkg, discount }: AppliedPackage) => (
-                  <div key={pkg.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-forest-800">
-                        {pkg.name}
-                      </p>
-                      <p className="text-sm text-bark-600">
-                        {pkg.description}
-                      </p>
-                    </div>
-                    <span className="font-serif text-xl font-bold text-red-500">
-                      -{formatPrice(discount)}
-                    </span>
+              <div className="space-y-4">
+                {displayOrder.packagesApplied && displayOrder.packagesApplied.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium text-bark-500 uppercase tracking-wider">套餐优惠</p>
+                    {displayOrder.packagesApplied.map(({ pkg, discount }: AppliedPackage) => (
+                      <div key={pkg.id} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-forest-800">
+                            {pkg.name}
+                          </p>
+                          <p className="text-sm text-bark-600">
+                            {pkg.description}
+                          </p>
+                        </div>
+                        <span className="font-serif text-xl font-bold text-red-500">
+                          -{formatPrice(discount)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                {displayOrder.activitiesApplied && displayOrder.activitiesApplied.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-xs font-medium text-amber-600 uppercase tracking-wider">限时活动</p>
+                    {displayOrder.activitiesApplied.map(({ activity, discount }: AppliedActivity) => (
+                      <div key={activity.id} className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Zap className="w-4 h-4 text-amber-500" />
+                            <p className="font-medium text-forest-800">
+                              {activity.name}
+                            </p>
+                          </div>
+                          <p className="text-sm text-bark-600 ml-6">
+                            {activity.discountType === 'percentage'
+                              ? `${activity.discountValue}%折扣`
+                              : `立减${activity.discountValue}元`}
+                            · 作用于{activity.target === 'lane' ? '箭道费' : activity.target === 'equipment' ? '器材费' : '总价'}
+                          </p>
+                          <p className="text-xs text-amber-600 ml-6 mt-0.5">
+                            有效期至{activity.endDate}
+                          </p>
+                        </div>
+                        <span className="font-serif text-xl font-bold text-red-500">
+                          -{formatPrice(discount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="space-y-6">
@@ -316,6 +355,17 @@ const Checkout = () => {
                   <span>套餐优惠</span>
                   <span className="font-medium">
                     -{formatPrice(displayOrder.packageDiscount)}
+                  </span>
+                </div>
+              )}
+              {displayOrder.activityDiscount > 0 && (
+                <div className="flex justify-between text-amber-600">
+                  <span className="flex items-center gap-1">
+                    <Zap className="w-3 h-3" />
+                    活动优惠
+                  </span>
+                  <span className="font-medium">
+                    -{formatPrice(displayOrder.activityDiscount)}
                   </span>
                 </div>
               )}

@@ -66,6 +66,30 @@ export interface Package {
   active: boolean;
 }
 
+export type ActivityTarget = 'lane' | 'equipment' | 'total';
+
+export type ActivityStatus = 'active' | 'expired' | 'upcoming';
+
+export interface Activity {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  applicableDays: number[];
+  applicableDistances: number[];
+  discountType: DiscountType;
+  discountValue: number;
+  target: ActivityTarget;
+  stackableWithPackage: boolean;
+  sortOrder: number;
+  active: boolean;
+}
+
+export interface AppliedActivity {
+  activity: Activity;
+  discount: number;
+}
+
 export interface AppliedPackage {
   pkg: Package;
   discount: number;
@@ -77,8 +101,10 @@ export interface Order {
   laneFee: number;
   equipmentFee: number;
   packageDiscount: number;
+  activityDiscount: number;
   totalAmount: number;
   packagesApplied: AppliedPackage[];
+  activitiesApplied: AppliedActivity[];
   equipmentRentals: EquipmentRental[];
   status: OrderStatus;
   createdAt: string;

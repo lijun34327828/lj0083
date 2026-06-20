@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Settings, BarChart3, ListTodo, Package, Target, Users, DollarSign, Calendar, Plus, Trash2, Edit2, ToggleLeft, ToggleRight, Eye, Search, Filter } from 'lucide-react';
+import { Settings, BarChart3, ListTodo, Package, Target, Users, DollarSign, Calendar, Plus, Trash2, Edit2, ToggleLeft, ToggleRight, Eye, Search, Filter, Zap, Clock, MapPin } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { formatPrice } from '@/utils/priceUtils';
+import { formatPrice, getActivityStatus } from '@/utils/priceUtils';
 
-type AdminTab = 'dashboard' | 'orders' | 'packages' | 'lanes';
+type AdminTab = 'dashboard' | 'orders' | 'packages' | 'activities' | 'lanes';
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
-  const { bookings, orders, packages, lanes } = useAppStore();
+  const { bookings, orders, packages, activities, lanes, toggleActivity } = useAppStore();
 
   const todayBookings = bookings.filter(
     (b) => b.date === new Date().toISOString().split('T')[0] && b.status !== 'cancelled'
@@ -23,6 +23,7 @@ const Admin = () => {
     { id: 'dashboard' as AdminTab, label: '数据概览', icon: BarChart3 },
     { id: 'orders' as AdminTab, label: '订单管理', icon: ListTodo },
     { id: 'packages' as AdminTab, label: '套餐管理', icon: Package },
+    { id: 'activities' as AdminTab, label: '活动管理', icon: Zap },
     { id: 'lanes' as AdminTab, label: '箭道管理', icon: Target },
   ];
 
@@ -313,6 +314,110 @@ const Admin = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'activities' && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-serif text-lg font-bold text-forest-800">
+              活动管理
+            </h3>
+            <button className="btn-primary flex items-center gap-2 text-sm py-2">
+              <Plus className="w-4 h-4" />
+              新增活动
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {activities.map((activity) => {
+              const status = getActivityStatus(activity);
+              const statusConfig: Record<string, { text: string; className: string }> = {
+                active: { text: '进行中', className: 'bg-forest-100 text-forest-700' },
+                expired: { text: '已过期', className: 'bg-gray-100 text-gray-500' },
+                upcoming: { text: '未开始', className: 'bg-blue-100 text-blue-700' },
+              };
+              const dayLabels = ['日', '一', '二', '三', '四', '五', '六'];
+              const applicableDaysText = activity.applicableDays.length === 7
+                ? '每天'
+                : activity.applicableDays.length === 0
+                ? '不限'
+                : `周${activity.applicableDays.map((d) => dayLabels[d]).join('、')}`;
+              const applicableDistancesText = activity.applicableDistances.length === 0
+                ? '不限距离'
+                : activity.applicableDistances.map((d) => `${d}米`).join('、');
+
+              return (
+                <div
+                  key={activity.id}
+                  className={`
+                    p-4 rounded-xl border-2 transition-all duration-200
+                    ${activity.active && status === 'active' ? 'border-amber-300 bg-amber-50/50' : 'border-gray-200 bg-gray-50 opacity-60'}
+                  `}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                        <Zap className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-forest-800">{activity.name}</h4>
+                          <span className={`badge ${statusConfig[status]?.className || ''}`}>
+                            {statusConfig[status]?.text || status}
+                          </span>
+                          {!activity.active && (
+                            <span className="badge bg-red-100 text-red-600">已停用</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-bark-400">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {activity.startDate} ~ {activity.endDate}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {applicableDaysText}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {applicableDistancesText}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-bark-400">
+                          <span>优惠：{
+                            activity.discountType === 'percentage'
+                              ? `${activity.discountValue}%折扣`
+                              : `立减${activity.discountValue}元`
+                          }</span>
+                          <span>作用于：{
+                            activity.target === 'lane' ? '箭道费' :
+                            activity.target === 'equipment' ? '器材费' : '总价'
+                          }</span>
+                          <span>{activity.stackableWithPackage ? '可叠加套餐' : '不可叠加套餐'}</span>
+                          <span>权重：{activity.sortOrder}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button className="p-2 text-bark-500 hover:text-bronze-600 transition-colors">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button className="p-2 text-bark-500 hover:text-red-600 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => toggleActivity(activity.id)}
+                        className={`p-2 transition-colors ${activity.active ? 'text-forest-500' : 'text-gray-400'}`}
+                      >
+                        {activity.active ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

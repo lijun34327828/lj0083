@@ -1,4 +1,4 @@
-import type { Package, EquipmentRental, Lane, AppliedPackage } from '@/types';
+import type { Package, EquipmentRental, Lane, AppliedPackage, Activity, AppliedActivity } from '@/types';
 
 export const calculateLaneFee = (pricePerHour: number, durationHours: number): number => {
   return Math.ceil(pricePerHour * durationHours * 100) / 100;
@@ -99,9 +99,11 @@ export const calculateTotalDiscount = (appliedPackages: AppliedPackage[]): numbe
 export const calculateTotalAmount = (
   laneFee: number,
   equipmentFee: number,
-  packageDiscount: number
+  packageDiscount: number,
+  activityDiscount: number = 0
 ): number => {
-  return Math.ceil((laneFee + equipmentFee - packageDiscount) * 100) / 100;
+  const total = laneFee + equipmentFee - packageDiscount - activityDiscount;
+  return Math.ceil(Math.max(0, total) * 100) / 100;
 };
 
 export const formatPrice = (price: number): string => {
@@ -127,4 +129,131 @@ export const getLaneByDistance = (lanes: Lane[], distance: number): Lane[] => {
 
 export const getAvailableLanes = (lanes: Lane[]): Lane[] => {
   return lanes.filter((lane) => lane.status === 'available');
+};
+
+export const getActivityStatus = (activity: Activity): 'active' | 'expired' | 'upcoming' => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(activity.startDate + 'T00:00:00');
+  const end = new Date(activity.endDate + 'T23:59:59');
+
+  if (today < start) return 'upcoming';
+  if (today > end) return 'expired';
+  return 'active';
+};
+
+export const isActivityApplicable = (
+  activity: Activity,
+  bookingDate: string,
+  laneDistance: number
+): boolean => {
+  if (!activity.active) return false;
+
+  const status = getActivityStatus(activity);
+  if (status !== 'active') return false;
+
+  const booking = new Date(bookingDate + 'T00:00:00');
+  const start = new Date(activity.startDate + 'T00:00:00');
+  const end = new Date(activity.endDate + 'T23:59:59');
+  if (booking < start || booking > end) return false;
+
+  const dayOfWeek = booking.getDay();
+  if (activity.applicableDays.length > 0 && !activity.applicableDays.includes(dayOfWeek)) return false;
+
+  if (activity.applicableDistances.length > 0 && !activity.applicableDistances.includes(laneDistance)) return false;
+
+  return true;
+};
+
+const calculateActivityDiscount = (
+  activity: Activity,
+  baseAmount: number
+): number => {
+  if (baseAmount <= 0) return 0;
+
+  let discount = 0;
+  if (activity.discountType === 'percentage') {
+    discount = (baseAmount * activity.discountValue) / 100;
+  } else {
+    discount = activity.discountValue;
+  }
+
+  discount = Math.ceil(discount * 100) / 100;
+  return Math.min(discount, baseAmount);
+};
+
+export const findApplicableActivities = (
+  activities: Activity[],
+  bookingDate: string,
+  laneDistance: number,
+  laneFee: number,
+  equipmentFee: number,
+  appliedPackages: AppliedPackage[]
+): AppliedActivity[] => {
+  const applicable = activities.filter((a) =>
+    isActivityApplicable(a, bookingDate, laneDistance)
+  );
+
+  const lanePackageDiscount = appliedPackages
+    .filter((ap) => ap.pkg.target === 'lane')
+    .reduce((sum, ap) => sum + ap.discount, 0);
+  const equipmentPackageDiscount = appliedPackages
+    .filter((ap) => ap.pkg.target === 'equipment')
+    .reduce((sum, ap) => sum + ap.discount, 0);
+  const totalPackageDiscount = lanePackageDiscount + equipmentPackageDiscount;
+
+  const result: AppliedActivity[] = [];
+
+  const laneActivities = applicable.filter((a) => a.target === 'lane');
+  const equipmentActivities = applicable.filter((a) => a.target === 'equipment');
+  const totalActivities = applicable.filter((a) => a.target === 'total');
+
+  for (const activity of laneActivities) {
+    const remainingLaneFee = Math.max(0, laneFee - lanePackageDiscount);
+
+    if (activity.stackableWithPackage) {
+      const discount = calculateActivityDiscount(activity, remainingLaneFee);
+      if (discount > 0) result.push({ activity, discount });
+    } else {
+      const activityDiscount = calculateActivityDiscount(activity, laneFee);
+      if (activityDiscount > lanePackageDiscount) {
+        result.push({ activity, discount: activityDiscount - lanePackageDiscount });
+      }
+    }
+  }
+
+  for (const activity of equipmentActivities) {
+    const remainingEquipmentFee = Math.max(0, equipmentFee - equipmentPackageDiscount);
+
+    if (activity.stackableWithPackage) {
+      const discount = calculateActivityDiscount(activity, remainingEquipmentFee);
+      if (discount > 0) result.push({ activity, discount });
+    } else {
+      const activityDiscount = calculateActivityDiscount(activity, equipmentFee);
+      if (activityDiscount > equipmentPackageDiscount) {
+        result.push({ activity, discount: activityDiscount - equipmentPackageDiscount });
+      }
+    }
+  }
+
+  for (const activity of totalActivities) {
+    const remainingTotal = Math.max(0, laneFee + equipmentFee - totalPackageDiscount);
+
+    if (activity.stackableWithPackage) {
+      const discount = calculateActivityDiscount(activity, remainingTotal);
+      if (discount > 0) result.push({ activity, discount });
+    } else {
+      const activityDiscount = calculateActivityDiscount(activity, laneFee + equipmentFee);
+      if (activityDiscount > totalPackageDiscount) {
+        result.push({ activity, discount: activityDiscount - totalPackageDiscount });
+      }
+    }
+  }
+
+  result.sort((a, b) => b.activity.sortOrder - a.activity.sortOrder);
+  return result;
+};
+
+export const calculateTotalActivityDiscount = (appliedActivities: AppliedActivity[]): number => {
+  return Math.ceil(appliedActivities.reduce((sum, aa) => sum + aa.discount, 0) * 100) / 100;
 };

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Lane, Booking, Equipment, Package, Order, EquipmentRental, BookingFormData, AppliedPackage } from '@/types';
+import type { Lane, Booking, Equipment, Package, Order, EquipmentRental, BookingFormData, AppliedPackage, Activity, AppliedActivity } from '@/types';
 import { lanes as initialLanes } from '@/data/lanes';
 import { equipment as initialEquipment } from '@/data/equipment';
 import { packages as initialPackages } from '@/data/packages';
+import { activities as initialActivities } from '@/data/activities';
 import { initialBookings, initialOrders } from '@/data/bookings';
 import { addDurationToTime, getTodayString } from '@/utils/timeUtils';
 import {
@@ -15,6 +16,8 @@ import {
   calculateTotalAmount,
   generateBookingId,
   generateOrderId,
+  findApplicableActivities,
+  calculateTotalActivityDiscount,
 } from '@/utils/priceUtils';
 import { checkLaneAvailability } from '@/utils/validation';
 
@@ -23,6 +26,7 @@ interface AppState {
   bookings: Booking[];
   equipment: Equipment[];
   packages: Package[];
+  activities: Activity[];
   orders: Order[];
   selectedDate: string;
   selectedDistance: number;
@@ -59,12 +63,14 @@ interface AppState {
   getLaneFee: () => number;
   getEquipmentFee: () => number;
   getBestPackages: () => AppliedPackage[];
+  getApplicableActivities: () => AppliedActivity[];
   getTotalAmount: () => number;
   getCurrentBooking: () => Booking | undefined;
   getCurrentOrder: () => Order | undefined;
   getEquipmentCategories: () => string[];
   getEquipmentByCategory: (category: string) => Equipment[];
   resetBookingForm: () => void;
+  toggleActivity: (activityId: string) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -74,6 +80,7 @@ export const useAppStore = create<AppState>()(
       bookings: initialBookings,
       equipment: initialEquipment,
       packages: initialPackages,
+      activities: initialActivities,
       orders: initialOrders,
       selectedDate: getTodayString(),
       selectedDistance: 0,
@@ -186,7 +193,7 @@ export const useAppStore = create<AppState>()(
       },
 
       createOrder: (bookingId) => {
-        const { bookings, equipmentRentals } = get();
+        const { bookings, equipmentRentals, activities } = get();
         const booking = bookings.find((b) => b.id === bookingId);
         if (!booking) return { success: false, error: '预约不存在' };
 
@@ -212,8 +219,20 @@ export const useAppStore = create<AppState>()(
           equipmentFee
         );
 
-        const totalDiscount = calculateTotalDiscount(appliedPackages);
-        const totalAmount = calculateTotalAmount(laneFee, equipmentFee, totalDiscount);
+        const totalPackageDiscount = calculateTotalDiscount(appliedPackages);
+
+        const appliedActivities = findApplicableActivities(
+          activities,
+          booking.date,
+          lane.distance,
+          laneFee,
+          equipmentFee,
+          appliedPackages
+        );
+
+        const totalActivityDiscount = calculateTotalActivityDiscount(appliedActivities);
+
+        const totalAmount = calculateTotalAmount(laneFee, equipmentFee, totalPackageDiscount, totalActivityDiscount);
 
         const orderId = generateOrderId();
         const newOrder: Order = {
@@ -221,9 +240,11 @@ export const useAppStore = create<AppState>()(
           bookingId,
           laneFee,
           equipmentFee,
-          packageDiscount: totalDiscount,
+          packageDiscount: totalPackageDiscount,
+          activityDiscount: totalActivityDiscount,
           totalAmount,
           packagesApplied: appliedPackages,
+          activitiesApplied: appliedActivities,
           equipmentRentals: [...equipmentRentals],
           status: 'unpaid',
           createdAt: new Date().toISOString(),
@@ -282,12 +303,33 @@ export const useAppStore = create<AppState>()(
         );
       },
 
+      getApplicableActivities: () => {
+        const { activities, selectedDate, selectedLaneId } = get();
+        const lane = get().getSelectedLane();
+        if (!lane || !selectedDate) return [];
+
+        const laneFee = get().getLaneFee();
+        const equipmentFee = get().getEquipmentFee();
+        const appliedPackages = get().getBestPackages();
+
+        return findApplicableActivities(
+          activities,
+          selectedDate,
+          lane.distance,
+          laneFee,
+          equipmentFee,
+          appliedPackages
+        );
+      },
+
       getTotalAmount: () => {
         const laneFee = get().getLaneFee();
         const equipmentFee = get().getEquipmentFee();
         const appliedPackages = get().getBestPackages();
-        const totalDiscount = calculateTotalDiscount(appliedPackages);
-        return calculateTotalAmount(laneFee, equipmentFee, totalDiscount);
+        const appliedActivities = get().getApplicableActivities();
+        const totalPackageDiscount = calculateTotalDiscount(appliedPackages);
+        const totalActivityDiscount = calculateTotalActivityDiscount(appliedActivities);
+        return calculateTotalAmount(laneFee, equipmentFee, totalPackageDiscount, totalActivityDiscount);
       },
 
       getCurrentBooking: () => {
@@ -321,6 +363,14 @@ export const useAppStore = create<AppState>()(
           equipmentRentals: [],
           currentBookingId: null,
           currentOrderId: null,
+        });
+      },
+
+      toggleActivity: (activityId) => {
+        set({
+          activities: get().activities.map((a) =>
+            a.id === activityId ? { ...a, active: !a.active } : a
+          ),
         });
       },
     }),

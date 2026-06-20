@@ -1,6 +1,6 @@
-import { Receipt, Target, ShoppingBag, Tag, Calculator } from 'lucide-react';
+import { Receipt, Target, ShoppingBag, Tag, Calculator, Zap } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { formatPrice, calculateTotalDiscount } from '@/utils/priceUtils';
+import { formatPrice, calculateTotalDiscount, calculateTotalActivityDiscount } from '@/utils/priceUtils';
 
 interface OrderSummaryProps {
   showTitle?: boolean;
@@ -8,14 +8,16 @@ interface OrderSummaryProps {
 }
 
 const OrderSummary = ({ showTitle = true, compact = false }: OrderSummaryProps) => {
-  const { getSelectedLane, getLaneFee, getEquipmentFee, getBestPackages, getTotalAmount, getEndTime, selectedStartTime, selectedDuration, equipmentRentals } =
+  const { getSelectedLane, getLaneFee, getEquipmentFee, getBestPackages, getApplicableActivities, getTotalAmount, getEndTime, selectedStartTime, selectedDuration, equipmentRentals } =
     useAppStore();
 
   const lane = getSelectedLane();
   const laneFee = getLaneFee();
   const equipmentFee = getEquipmentFee();
   const appliedPackages = getBestPackages();
-  const totalDiscount = calculateTotalDiscount(appliedPackages);
+  const appliedActivities = getApplicableActivities();
+  const totalPackageDiscount = calculateTotalDiscount(appliedPackages);
+  const totalActivityDiscount = calculateTotalActivityDiscount(appliedActivities);
   const totalAmount = getTotalAmount();
   const endTime = getEndTime();
 
@@ -72,6 +74,24 @@ const OrderSummary = ({ showTitle = true, compact = false }: OrderSummaryProps) 
               <div>
                 <p className="text-sm font-medium">{pkg.name}</p>
                 <p className="text-xs">{pkg.description}</p>
+              </div>
+            </div>
+            <span className="text-sm font-medium">-{formatPrice(discount)}</span>
+          </div>
+        ))}
+
+        {appliedActivities.map(({ activity, discount }) => (
+          <div key={activity.id} className="flex items-start justify-between text-amber-600">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">{activity.name}</p>
+                <p className="text-xs">
+                  {activity.discountType === 'percentage'
+                    ? `${activity.discountValue}%折扣`
+                    : `立减${activity.discountValue}元`}
+                  · 有效期至{activity.endDate}
+                </p>
               </div>
             </div>
             <span className="text-sm font-medium">-{formatPrice(discount)}</span>
